@@ -1,0 +1,14 @@
+out_dir: "out-shakespeare"
+eval_interval: 5
+eval_iters: 40
+wandb_log: false
+wandb_project: "shakespeare"
+wandb_run_name: "ft-" + str(time.time())
+dataset: "shakespeare"
+init_from: "gpt2-xl"
+always_save_checkpoint: false
+batch_size: 1
+gradient_accumulation_steps: 32
+max_iters: 20
+learning_rate: 3.0e-5
+decay_lr: false
