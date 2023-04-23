@@ -200,7 +200,7 @@ def train():
         deterministic=True,
         gradient_clip_val=config.grad_clip,
         accumulate_grad_batches=config.gradient_accumulation_steps,
-        log_every_n_steps=config.log_every_n_steps if config.log_every_n_steps else 1
+        log_every_n_steps=config.log_every_n_steps if config.log_every_n_steps else config.eval_interval
     )
     trainer.fit(
         model,
