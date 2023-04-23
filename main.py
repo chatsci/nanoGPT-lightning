@@ -254,6 +254,9 @@ def sample():
 
 if __name__ == '__main__':
     train()
-    sample()
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    is_main_process = local_rank == 0
+    if is_main_process:
+        sample()
 
 
