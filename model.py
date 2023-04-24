@@ -318,29 +318,6 @@ class GPTLightning(pl.LightningModule):
 
         return model
 
-    # def configure_optimizers(self):
-    #     optimizer = optim.AdamW(self.model.parameters(), lr=self.config.learning_rate,
-    #                              betas=(self.config.beta1, self.config.beta2), weight_decay=self.config.weight_decay)
-    #     scheduler = {
-    #         'scheduler': optim.lr_scheduler.LambdaLR(optimizer, self.get_lr),
-    #         'interval': 'step',
-    #         'frequency': 1
-    #     }
-    #     return [optimizer], [scheduler]
-
-    def get_lr(self, it):
-        # 1) linear warmup for warmup_iters steps
-        if it < self.config.warmup_iters:
-            return self.config.learning_rate * it / self.config.warmup_iters
-        # 2) if it > lr_decay_iters, return min learning rate
-        if it > self.config.lr_decay_iters:
-            return self.config.min_lr
-        # 3) in between, use cosine decay down to min learning rate
-        decay_ratio = (it - self.config.warmup_iters) / \
-            (self.config.lr_decay_iters - self.config.warmup_iters)
-        assert 0 <= decay_ratio <= 1
-        coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges 0..1
-        return self.config.min_lr + coeff * (self.config.learning_rate - self.config.min_lr)
 
     def configure_optimizers(self):
         """
@@ -404,8 +381,23 @@ class GPTLightning(pl.LightningModule):
         optimizer = torch.optim.AdamW(
             optim_groups, lr=self.config.learning_rate, betas=(self.config.beta1, self.config.beta2), **extra_args)
 
+        # for get_lr in scheduler
+        total_steps = self.config.max_iters
+        pct_start = self.config.warmup_iters / total_steps
+        final_div_factor = self.config.learning_rate / self.config.min_lr
+
         scheduler = {
-            'scheduler': optim.lr_scheduler.LambdaLR(optimizer, self.get_lr),
+            # 'scheduler': optim.lr_scheduler.LambdaLR(optimizer, self.get_lr),
+            'scheduler': torch.optim.lr_scheduler.OneCycleLR(
+                optimizer,
+                max_lr=self.config.learning_rate,
+                total_steps=total_steps,
+                pct_start=pct_start,
+                final_div_factor=final_div_factor,
+                div_factor=1.0,  # No additional scaling for the initial learning rate
+                anneal_strategy='cos',  # Use cosine annealing
+                cycle_momentum=False,  # Disable momentum cycling
+            ),
             'interval': 'step',
             'frequency': 1
         }
@@ -493,6 +485,7 @@ class GPTCallback(pl.Callback):
         # Log the learning rate
         lr = pl_module.trainer.optimizers[0].param_groups[0]["lr"]
         pl_module.log("lr", lr, on_step=True, on_epoch=False, logger=True)
+        # print("--- train Learning rate: ", pl_module.trainer.optimizers[0].param_groups[0]["lr"])
 
         # Log the mfu
         if trainer.global_step % self.log_interval == 0:
@@ -511,6 +504,7 @@ class GPTCallback(pl.Callback):
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, *args, **kwargs):
         loss = outputs["loss"]
+        # print("*** val Learning rate: ", pl_module.trainer.optimizers[0].param_groups[0]["lr"])
         pl_module.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
     def on_test_batch_end(self, trainer, pl_module, outputs, *args, **kwargs):

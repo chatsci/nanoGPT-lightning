@@ -160,7 +160,6 @@ def train():
         unoptimized_model = model
         model = torch.compile(model)  # requires PyTorch 2.0
 
-
     # create the dataset and dataloaders
     config.ddp = int(os.environ.get('RANK', -1)) != -1
     num_workers = get_num_workers(use_ddp=config.ddp)
@@ -175,13 +174,15 @@ def train():
     data_module.setup(stage='fit')
 
     # set up the WandbLogger
+    # !! NOTE: make it conditioned on config.use_wandb to decide whether use wandb or not later.
     wandb_logger = WandbLogger(project=config.project, log_model=True)
 
     # set up the ModelCheckpoint
     checkpoint_callback = ModelCheckpoint(
         dirpath=config.out_dir,
         filename='ckpt-{epoch:02d}-{val_loss:.2f}.pt',  # Save models with epoch and val_loss
-        save_top_k=-1 if config.always_save_checkpoint else 1,
+        every_n_train_steps=config.eval_interval,
+        save_top_k=-1, # Save all checkpoints !! NOTE: here I omited the config.always_save_checkpoint
         verbose=True,
         monitor='val_loss',
         mode='min',
@@ -200,8 +201,10 @@ def train():
         deterministic=True,
         gradient_clip_val=config.grad_clip,
         accumulate_grad_batches=config.gradient_accumulation_steps,
+        # val_check_interval=config.eval_interval, # !!! Note: too frequency eval. Now is just for debugging. We prefer eval every epoch.
         log_every_n_steps=config.log_every_n_steps if config.log_every_n_steps else config.eval_interval
     )
+
     trainer.fit(
         model,
         datamodule=data_module,
@@ -255,6 +258,7 @@ def sample():
 
 if __name__ == '__main__':
     model, config = train()
+
     local_rank = int(os.environ.get('LOCAL_RANK', 0))
     is_main_process = local_rank == 0
     if is_main_process:
