@@ -174,22 +174,22 @@ def train():
     data_module.setup(stage='fit')
 
     # set up the WandbLogger
-    # !! NOTE: make it conditioned on config.use_wandb to decide whether use wandb or not later.
-    wandb_logger = WandbLogger(project=config.project, log_model=True)
+    if config.wandb_log:
+        wandb_logger = WandbLogger(project=config.project, log_model=True)
 
     # set up the ModelCheckpoint
     checkpoint_callback = ModelCheckpoint(
         dirpath=config.out_dir,
-        filename='ckpt-{epoch:02d}-{val_loss:.2f}.pt',  # Save models with epoch and val_loss
-        every_n_train_steps=config.eval_interval,
-        save_top_k=-1, # Save all checkpoints !! NOTE: here I omited the config.always_save_checkpoint
+        filename='ckpt-{epoch:02d}-{val_loss:.2f}.pt',
+        every_n_train_steps=config.save_checkpoint_every_n_train_steps,
+        save_top_k=-1 if config.always_save_checkpoint else 1, #!!! set always_save_checkpoint to be False if storage is limited
         verbose=True,
         monitor='val_loss',
         mode='min',
         save_last=True  # Save the latest model, regardless of its performance. The name is last.ckpt
     )
 
-    model_callback = GPTCallback(config.log_interval, config.gradient_accumulation_steps)
+    model_callback = GPTCallback(config.log_every_n_steps, config.accumulate_grad_batches)
 
     # set up the Trainer
     trainer = pl.Trainer(
@@ -199,10 +199,11 @@ def train():
         accelerator='ddp' if config.ddp else 'auto',
         precision=16 if config.mixed_precision else 32,
         deterministic=True,
-        gradient_clip_val=config.grad_clip,
-        accumulate_grad_batches=config.gradient_accumulation_steps,
-        # val_check_interval=config.eval_interval, # !!! Note: too frequency eval. Now is just for debugging. We prefer eval every epoch.
-        log_every_n_steps=config.log_every_n_steps if config.log_every_n_steps else config.eval_interval
+        gradient_clip_val=config.grad_clip_val,
+        accumulate_grad_batches=config.accumulate_grad_batches,
+        val_check_interval=config.val_check_interval, #!!! this may make the training slow as we eval frequently. disable it to eval only after each epoch
+        limit_val_batches=config.limit_val_batches, #!!! Not using full validation set. Disable it if evaluate after each epoch
+        log_every_n_steps=config.log_every_n_steps
     )
 
     trainer.fit(
@@ -261,7 +262,7 @@ if __name__ == '__main__':
 
     local_rank = int(os.environ.get('LOCAL_RANK', 0))
     is_main_process = local_rank == 0
-    if is_main_process:
+    if is_main_process:  # if not using this condition, it will cause problem when run with ddp: input n won't stop.
         run_sample(model)
 
 

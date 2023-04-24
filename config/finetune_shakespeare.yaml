@@ -1,14 +1,50 @@
-out_dir: "out-shakespeare"
-eval_interval: 5
-eval_iters: 40
-wandb_log: false
-wandb_project: "shakespeare"
-wandb_run_name: "ft-" + str(time.time()) # !!!
-dataset: "shakespeare"
-init_from: "gpt2-xl"
-always_save_checkpoint: false
-batch_size: 1
-gradient_accumulation_steps: 32
-max_iters: 20
-learning_rate: 3.0e-5
-decay_lr: false
+# config for training a gpt2 style model based on shakespeare dataset
+# I/O
+out_dir: 'out-shakespeare' # output folder name for saving checkpoints
+save_checkpoint_every_n_train_steps: 5 # save checkpoint for every n train steps during training
+val_check_interval: 250 # evaluate the loss on train/validation set for every val_check_interval train steps
+log_every_n_steps: 100
+limit_val_batches: 40 # limit the number of batches to use for fast estimate val loss during training
+eval_only: False # if True, script exits right after the first eval
+always_save_checkpoint: False # if True, always save a checkpoint after each eval
+init_from: 'gpt2-xl' # 'scratch' or 'resume' or 'gpt2*'
+
+# wandb logging
+wandb_log: True
+wandb_project: 'finetune-shakespeare'
+wandb_run_name: 'finetune-shakespeare'
+
+# data
+dataset: 'shakespeare'
+accumulate_grad_batches: 32 # used to simulate larger batch sizes
+batch_size: 1 # if accumulate_grad_batches > 1, this is the micro-batch size
+block_size: 1024
+
+# model
+n_layer: 12
+n_head: 12
+n_embd: 768
+dropout: 0.0 # for pretraining 0 is good, for finetuning try 0.1+
+bias: False # do we use bias inside LayerNorm and Linear layers?
+
+# adamw optimizer
+learning_rate: 3.0e-5 # max learning rate # Bang: Note: don't write 1e-1 style, it will be considered as string
+max_iters: 20 # total number of training iterations
+weight_decay: 1.0e-1
+beta1: 0.9
+beta2: 0.95
+grad_clip_val: 1.0 # clip gradients at this value, or disable if == 0.0
+
+# learning rate decay settings
+decay_lr: false # whether to decay the learning rate
+warmup_iters: 2000 # how many steps to warm up for
+lr_decay_iters: 600000 # should be ~= max_iters per Chinchilla
+min_lr: 6.0e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+
+# DDP settings
+backend: 'nccl' # 'nccl', 'gloo', etc.
+
+# system
+device: 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+dtype: 'bfloat16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+compile: True # use PyTorch 2.0 to compile the model to be faster

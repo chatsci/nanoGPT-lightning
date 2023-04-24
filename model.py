@@ -469,10 +469,10 @@ class GPTLightning(pl.LightningModule):
 
 
 class GPTCallback(pl.Callback):
-    def __init__(self, log_interval, accumulation_steps):
+    def __init__(self, log_every_n_steps, accumulate_grad_batches):
         super().__init__()
-        self.log_interval = log_interval
-        self.accumulation_steps = accumulation_steps
+        self.log_every_n_steps = log_every_n_steps
+        self.accumulate_grad_batches = accumulate_grad_batches
         self.running_mfu = -1.0
         self.local_iter_num = 0
         self.t0 = time.time()
@@ -487,10 +487,9 @@ class GPTCallback(pl.Callback):
         # Log the learning rate
         lr = pl_module.trainer.optimizers[0].param_groups[0]["lr"]
         pl_module.log("lr", lr, on_step=True, on_epoch=False, logger=True)
-        # print("--- train Learning rate: ", pl_module.trainer.optimizers[0].param_groups[0]["lr"])
 
         # Log the mfu
-        if trainer.global_step % self.log_interval == 0:
+        if trainer.global_step % self.log_every_n_steps == 0:
             # calculate dt
             t1 = time.time()
             dt = t1 - self.t0
@@ -498,15 +497,15 @@ class GPTCallback(pl.Callback):
 
             if self.local_iter_num >= 5:  # let the training loop settle a bit
                 mfu = pl_module.estimate_mfu(
-                    pl_module.config.batch_size * self.accumulation_steps, dt)
+                    pl_module.config.batch_size * self.accumulate_grad_batches, dt)
                 self.running_mfu = mfu if self.running_mfu == -1.0 else 0.9 * self.running_mfu + 0.1 * mfu
             
             pl_module.log("mfu", self.running_mfu, on_step=True, on_epoch=False, prog_bar=True, logger=True)
             self.local_iter_num += 1
 
+
     def on_validation_batch_end(self, trainer, pl_module, outputs, *args, **kwargs):
         loss = outputs["loss"]
-        # print("*** val Learning rate: ", pl_module.trainer.optimizers[0].param_groups[0]["lr"])
         pl_module.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
     def on_test_batch_end(self, trainer, pl_module, outputs, *args, **kwargs):
