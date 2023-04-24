@@ -387,7 +387,9 @@ class GPTLightning(pl.LightningModule):
         final_div_factor = self.config.learning_rate / self.config.min_lr
 
         scheduler = {
-            # 'scheduler': optim.lr_scheduler.LambdaLR(optimizer, self.get_lr),
+            # In this configuration, the OneCycleLR scheduler will perform linear warmup
+            # for the first pct_start fraction of the total steps, followed by cosine annealing
+            # for the remaining steps. The learning rate will be scaled down to min_lr at the end of the annealing.
             'scheduler': torch.optim.lr_scheduler.OneCycleLR(
                 optimizer,
                 max_lr=self.config.learning_rate,
